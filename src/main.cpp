@@ -9,6 +9,7 @@ const int BUTTON_PIN_CASE = 10;
 const int LED_PIN_STATUS = 13;
 
 const int DEBOUNCE_INTERVAL = 60;
+const int RELAY_MOMENTARY_INTERVAL = 1000;
 
 Bounce button0Debouncer;
 Bounce button1Debouncer;
@@ -17,6 +18,9 @@ int publishingButton0 = -1;
 int publishingButton1 = -1;
 int button0State = -1;
 int button1State = -1;
+
+unsigned long momentary0 = 0;
+unsigned long momentary1 = 0;
 
 HomieNode myNode("dual", "sonoffdual");
 
@@ -34,7 +38,7 @@ void activateRelay(int relay, bool activated)
 
 bool relay0Handler(const HomieRange& range, const String& value)
 {
-  bool valueBool = (value == "true");
+  bool valueBool = (value == "1");
 
   activateRelay(0, valueBool);
 
@@ -43,9 +47,25 @@ bool relay0Handler(const HomieRange& range, const String& value)
 
 bool relay1Handler(const HomieRange& range, const String& value)
 {
-  bool valueBool = (value == "true");
+  bool valueBool = (value == "1");
 
   activateRelay(1, valueBool);
+
+  return true;
+}
+
+bool relay0momentaryHandler(const HomieRange& range, const String& value)
+{
+  activateRelay(0, true);
+  momentary0 = millis();
+
+  return true;
+}
+
+bool relay1momentaryHandler(const HomieRange& range, const String& value)
+{
+  activateRelay(1, true);
+  momentary1 = millis();
 
   return true;
 }
@@ -77,6 +97,8 @@ void setup()
 
   myNode.advertise("relay0").settable(relay0Handler);
   myNode.advertise("relay1").settable(relay1Handler);
+  myNode.advertise("relay0momentary").settable(relay0momentaryHandler);
+  myNode.advertise("relay1momentary").settable(relay1momentaryHandler);
   myNode.advertise("button0");
   myNode.advertise("button1");
 
@@ -111,6 +133,24 @@ void homieIndependentLoop()
   {
     button1State = currentButton1;
     publishingButton1 = currentButton1;
+  }
+
+  if(momentary0 != 0)
+  {
+    if(millis() - momentary0 >= RELAY_MOMENTARY_INTERVAL)
+    {
+      momentary0 = 0;
+      activateRelay(0, false);
+    }
+  }
+
+  if(momentary1 != 0)
+  {
+    if(millis() - momentary1 >= RELAY_MOMENTARY_INTERVAL)
+    {
+      momentary1 = 0;
+      activateRelay(1, false);
+    }
   }
 }
 
