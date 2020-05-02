@@ -1,7 +1,8 @@
 #include <Homie.h>
 #include <Bounce2.h>
+#include <EEPROM.h>
 
-const int SHUTTER_PIN_BUTTON_0 = 0;
+const int SHUTTER_PIN_BUTTON_0 = 3;
 const int SHUTTER_PIN_BUTTON_1 = 9;
 const int SHUTTER_PIN_RELAY_0 = 12;
 const int SHUTTER_PIN_RELAY_1 = 5;
@@ -22,7 +23,11 @@ int button1State = -1;
 unsigned long momentary0 = 0;
 unsigned long momentary1 = 0;
 
-HomieNode myNode("dual", "sonoffdual");
+uint8_t rebootCount = 0;
+unsigned long disconnectedTime = 0;
+unsigned long const maxDisconnectedTime = 20000;
+
+HomieNode myNode("dual", "sonoffdual", "dual");
 
 void activateRelay(int relay, bool activated)
 {
@@ -70,6 +75,15 @@ bool relay1momentaryHandler(const HomieRange& range, const String& value)
   return true;
 }
 
+void readRebootCount() {
+  rebootCount = EEPROM.read(0);
+}
+
+void writeRebootCount() {
+  EEPROM.write(0, rebootCount);
+  EEPROM.commit();
+}
+
 void loopHandler() {
   if(publishingButton0 != -1)
   {
@@ -84,14 +98,31 @@ void loopHandler() {
   }
 }
 
+void onHomieEvent(const HomieEvent& event) {
+  switch(event.type) {
+    case HomieEventType::MQTT_READY:
+      rebootCount = 0;
+      writeRebootCount();
+      Serial.println("Connect back to normal");
+      break;
+    default:
+      break;
+  }
+}
+
 void setup()
 {
   Serial.begin(115200);
   delay(100);
   Serial << endl << endl;
 
-  Homie_setFirmware("sonoffdual-simple", "1.0.2");
+  readRebootCount();
+  rebootCount++;
+  writeRebootCount();
+
+  Homie_setFirmware("EnemHomieSonoffDualSimple", "1.1.0");
   Homie.setLoopFunction(loopHandler);
+  Homie.onEvent(onHomieEvent);
   Homie.setLedPin(LED_PIN_STATUS, LOW).setResetTrigger(BUTTON_PIN_CASE, LOW, 5000);
   Homie.setup();
 
@@ -156,5 +187,33 @@ void homieIndependentLoop()
 
 void loop() {
   Homie.loop();
+
+  if(rebootCount >= 3)
+  {
+    if(Homie.isConfigured())
+    {
+      if (Homie.isConnected())
+      {
+        disconnectedTime = 0;
+      }
+      else
+      {
+        if(disconnectedTime == 0)
+        {
+          disconnectedTime = millis();
+        }
+        else
+        {
+          if(millis() - disconnectedTime >= maxDisconnectedTime)
+          {
+            rebootCount = 0;
+            writeRebootCount();
+            Homie.reset();
+          }
+        }
+      }
+    }
+  }
+
   homieIndependentLoop();
 }
