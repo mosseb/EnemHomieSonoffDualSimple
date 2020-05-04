@@ -4,7 +4,7 @@ Simply exposes a homie node with both relays and both buttons as device attribut
 
 Sonoff Dual R2 config :
 
-Button #0 : GPIO0
+Button #0 : GPIO3 (RX)
 
 Button #1 : GPIO9
 
